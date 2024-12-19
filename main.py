@@ -9,7 +9,7 @@ from models import Host, session
 def main_menu():
     """Main menu of the application."""
     #Options presented upon application start
-    options = ["[i] Import Hosts", "[c] Connect to Host", "[e] Exit"]
+    options = ["[i] Import Hosts", "[c] Connect to Host", "[a] View and Run Ansible Playbooks", "[e] Exit"]
     terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Main Menu")
     menu_entry_index = terminal_menu.show()
     #Conditional statements to determine the next steps
@@ -18,6 +18,8 @@ def main_menu():
     elif menu_entry_index == 1:
         connect_host_menu()
     elif menu_entry_index == 2:
+        preview_and_run_playbook_menu()
+    elif menu_entry_index == 3:
         exit()
 
 def import_hosts_menu():
@@ -161,6 +163,46 @@ def connect_to_host(hostname):
             print(f"Failed to connect: {e}")
     else:
         print(f"Host {hostname} not found in the database.")
+    main_menu()
+
+def list_files(directory="."):
+    return (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
+
+def preview_and_run_playbook_menu():
+    """Menu to preview files and run ansible-playbook."""
+    files = []
+    for f in os.listdir('.'):
+        if os.path.isfile(f):
+            files.append(f)
+    options = []
+    for i, file in enumerate(files, start=1):
+        options.append(f"[{i}] {file}")
+    options.append("[b] Back to Main Menu")
+    
+    def preview_command(file):
+        """Function to preview the contents of a file."""
+        try:
+            with open(file, 'r') as f:
+                return f.read()
+        except Exception:
+            return ""  # Return an empty string if the file can't be read
+
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), preview_command=preview_command)
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == len(options) - 1:
+        main_menu()
+    else:
+        selected_file = files[menu_entry_index]
+        run_ansible_playbook(selected_file)
+
+def run_ansible_playbook(file):
+    """Function to run ansible-playbook with the selected file and arguments."""
+    args = input("Enter any additional arguments for ansible-playbook: ")
+    command = f"ansible-playbook {file} {args}"
+    try:
+        subprocess.run(command, shell=True)
+    except Exception as e:
+        print(f"Failed to run ansible-playbook: {e}")
     main_menu()
 
 def clear_screen():
