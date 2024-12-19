@@ -10,7 +10,7 @@ def main_menu():
     """Main menu of the application."""
     #Options presented upon application start
     options = ["[i] Import Hosts", "[c] Connect to Host", "[e] Exit"]
-    terminal_menu = TerminalMenu(options)
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'))
     menu_entry_index = terminal_menu.show()
     #Conditional statements to determine the next steps
     if menu_entry_index == 0:
@@ -24,7 +24,7 @@ def import_hosts_menu():
     """Menu to import hosts from Ansible inventory or manually add a host."""
     #Options presented upon selecting "Import Hosts"
     options = ["[y] Import from Ansible YAML", "[i] Import from Ansible INI", "[m] Manually add Host", "[b] Back to Main Menu"]
-    terminal_menu = TerminalMenu(options)
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'))
     menu_entry_index = terminal_menu.show()
     #Conditional statements to determine the next steps
     #If "Import from Ansible YAML" is selected, the import_from_yaml function is called
@@ -138,7 +138,7 @@ def connect_host_menu():
     hosts = session.query(Host).all()
     #Create an option in the menu for all hosts and a back option
     options = [f"[{i}] {host.hostname}" for i, host in enumerate(hosts, start=1)] + ["[b] Back to Main Menu"]
-    terminal_menu = TerminalMenu(options)
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'))
     menu_entry_index = terminal_menu.show()
     #Logic to initiate connect to host or go back to main menu with a dynamic amount of options
     if menu_entry_index == len(options) - 1:
