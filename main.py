@@ -9,7 +9,7 @@ from models import Host, session
 def main_menu():
     """Main menu of the application."""
     #Options presented upon application start
-    options = ["Import Hosts", "Connect to Host", "Exit"]
+    options = ["[i] Import Hosts", "[c] Connect to Host", "[e] Exit"]
     terminal_menu = TerminalMenu(options)
     menu_entry_index = terminal_menu.show()
     #Conditional statements to determine the next steps
@@ -23,7 +23,7 @@ def main_menu():
 def import_hosts_menu():
     """Menu to import hosts from Ansible inventory or manually add a host."""
     #Options presented upon selecting "Import Hosts"
-    options = ["Import from Ansible YAML", "Import from Ansible INI", "Manually add Host", "Back to Main Menu"]
+    options = ["[y] Import from Ansible YAML", "[i] Import from Ansible INI", "[m] Manually add Host", "[b] Back to Main Menu"]
     terminal_menu = TerminalMenu(options)
     menu_entry_index = terminal_menu.show()
     #Conditional statements to determine the next steps
@@ -91,12 +91,12 @@ def manually_add_host():
             password=password
         )
         session.add(new_host)
+        session.commit()
+        print(f"Host {hostname} added to the database.")
     except IntegrityError:
         #Used to prevent having the same host added to the database
         session.rollback()
         print(f"Host {hostname} already exists in the database.")
-    session.commit()
-    print(f"Host {hostname} added to the database.")
     main_menu()
 
 def import_from_ini():
@@ -137,14 +137,14 @@ def connect_host_menu():
     #Query all hosts from the database
     hosts = session.query(Host).all()
     #Create an option in the menu for all hosts and a back option
-    options = [host.hostname for host in hosts] + ["Back to Main Menu"]
+    options = [f"[{i}] {host.hostname}" for i, host in enumerate(hosts, start=1)] + ["[b] Back to Main Menu"]
     terminal_menu = TerminalMenu(options)
     menu_entry_index = terminal_menu.show()
     #Logic to initiate connect to host or go back to main menu with a dynamic amount of options
     if menu_entry_index == len(options) - 1:
         main_menu()
     else:
-        connect_to_host(options[menu_entry_index])
+        connect_to_host(hosts[menu_entry_index].hostname)
 
 def connect_to_host(hostname):
     """Function to connect to a host via SSH."""
