@@ -34,8 +34,7 @@ def import_hosts_menu():
         # TODO import_from_ini()
         print("Not implemented yet.")
     elif menu_entry_index == 2:
-        # TODO manually_add_host()
-        print("Not implemented yet.")
+        manually_add_host()
     elif menu_entry_index == 3:
         main_menu()
 
@@ -69,6 +68,34 @@ def import_from_yaml():
         print("Duplicate host found. Rolling back changes.")
     except Exception as e:
         print(f"Failed to import from YAML: {e}")
+    main_menu()
+
+def manually_add_host():
+    """Function to manually add a host."""
+    #User input to add a host
+    hostname = input("Enter hostname: ")
+    ip_address = input("Enter IP address: ")
+    network_os = input("Enter network OS: ")
+    connection = input("Enter connection type: ")
+    username = input("Enter username: ")
+    password = input("Enter password: ")
+    #Add host to the database
+    try:
+        new_host = Host(
+            hostname=hostname,
+            ip_address=ip_address,
+            network_os=network_os,
+            connection=connection,
+            username=username,
+            password=password
+        )
+        session.add(new_host)
+    except IntegrityError:
+        #Used to prevent having the same host added to the database
+        session.rollback()
+        print(f"Host {hostname} already exists in the database.")
+    session.commit()
+    print(f"Host {hostname} added to the database.")
     main_menu()
 
 def connect_host_menu():
