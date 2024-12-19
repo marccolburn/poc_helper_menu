@@ -1,6 +1,7 @@
 import yaml
 import os
 import subprocess
+import configparser
 from sqlalchemy.exc import IntegrityError
 from simple_term_menu import TerminalMenu
 from models import Host, session
@@ -32,7 +33,7 @@ def import_hosts_menu():
     #If "Import from Ansible INI" is selected, the import_from_ini function is called
     elif menu_entry_index == 1:
         # TODO import_from_ini()
-        print("Not implemented yet.")
+        import_from_ini()
     elif menu_entry_index == 2:
         manually_add_host()
     elif menu_entry_index == 3:
@@ -41,7 +42,7 @@ def import_hosts_menu():
 def import_from_yaml():
     """Function to import hosts from an Ansible YAML inventory file."""
     #Name of file to open
-    yaml_file = "inventory"
+    yaml_file = input("What is the name of your inventory file? ")
     try:
         with open(yaml_file, 'r') as file:
             data = yaml.safe_load(file)
@@ -96,6 +97,39 @@ def manually_add_host():
         print(f"Host {hostname} already exists in the database.")
     session.commit()
     print(f"Host {hostname} added to the database.")
+    main_menu()
+
+def import_from_ini():
+    """Function to import hosts from an Ansible INI inventory file."""
+    ini_file = input("What is the name of your inventory file? ")
+    config = configparser.ConfigParser()
+    try:
+        config.read(ini_file)
+        for section in config.sections():
+            if section.endswith(":vars"):
+                continue  # Skip the vars section
+            vars_section = section + ":vars"
+            vars = config[vars_section] if vars_section in config else {}
+            for item in config.items(section):
+                hostname = item[0].split()[0]
+                host_info = item[1].split()
+                ip_address = host_info[0].split('=')[1] if '=' in host_info[0] else host_info[0]
+                new_host = Host(
+                    hostname=hostname,
+                    ip_address=ip_address,
+                    network_os=vars.get('ansible_network_os', ''),
+                    connection=vars.get('ansible_connection', ''),
+                    username=vars.get('ansible_user', ''),
+                    password=vars.get('ansible_password', '')
+                )
+                session.add(new_host)
+        session.commit()
+        print("Hosts added to the database.")
+    except IntegrityError:
+        session.rollback()
+        print("Duplicate host found. Rolling back changes.")
+    except Exception as e:
+        print(f"Failed to import from INI: {e}")
     main_menu()
 
 def connect_host_menu():
