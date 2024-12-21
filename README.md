@@ -14,6 +14,7 @@ This is a Python-based terminal application for managing and connecting to hosts
 - `PyYAML` for parsing YAML files.
 - `SQLAlchemy` for database operations.
 - `simple-term-menu` for the terminal menu interface.
+- `tabulate` for tabulating data to be printed
 
 ## Installation
 
@@ -46,6 +47,7 @@ This is a Python-based terminal application for managing and connecting to hosts
 
 The application uses SQLite for storing host information. The schema is defined in `models.py` and includes the following fields:
 
+### Hosts Table
 - `id`: Integer, primary key.
 - `hostname`: String, unique, not nullable.
 - `ip_address`: String, not nullable.
@@ -53,6 +55,14 @@ The application uses SQLite for storing host information. The schema is defined 
 - `connection`: String, not nullable.
 - `username`: String, not nullable.
 - `password`: String, not nullable.
+
+### Links Table
+
+- `id` : Integer, primary_key
+- `source_host` : String, not nullable
+- `source_interface` : String, not nullable
+- `destination_host` : String, not nullable
+- `destination_interface` : String, not nullable
 
 ## Contributing
 
