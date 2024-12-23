@@ -4,22 +4,28 @@ import subprocess
 import configparser
 from sqlalchemy.exc import IntegrityError
 from simple_term_menu import TerminalMenu
-from models import Host, session
+from models import Host, session, Link
+from tabulate import tabulate
+from configparser import ConfigParser
+import getpass
+
 
 def main_menu():
     """Main menu of the application."""
-    #Options presented upon application start
-    options = ["[i] Import Hosts", "[c] Connect to Host", "[a] View and Run Ansible Playbooks", "[e] Exit"]
+    options = ["[i] Import Hosts", "[l] Import Links", "[c] Connect to Host", "[a] View and Run Ansible Playbooks", "[m] Interface Management", "[e] Exit"]
     terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Main Menu")
     menu_entry_index = terminal_menu.show()
-    #Conditional statements to determine the next steps
     if menu_entry_index == 0:
         import_hosts_menu()
     elif menu_entry_index == 1:
-        connect_host_menu()
+        import_links_menu()
     elif menu_entry_index == 2:
-        preview_and_run_playbook_menu()
+        connect_host_menu()
     elif menu_entry_index == 3:
+        preview_and_run_playbook_menu()
+    elif menu_entry_index == 4:
+        interface_management_menu()
+    elif menu_entry_index == 5:
         exit()
 
 def import_hosts_menu():
@@ -29,44 +35,120 @@ def import_hosts_menu():
     terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Import Hosts")
     menu_entry_index = terminal_menu.show()
     #Conditional statements to determine the next steps
-    #If "Import from Ansible YAML" is selected, the import_from_yaml function is called
+    #If "Import from Ansible YAML" is selected, the import_inv_from_yaml function is called
     if menu_entry_index == 0:
-        import_from_yaml()
-    #If "Import from Ansible INI" is selected, the import_from_ini function is called
+        import_inv_from_yaml()
+    #If "Import from Ansible INI" is selected, the import_inv_from_ini function is called
     elif menu_entry_index == 1:
-        # TODO import_from_ini()
-        import_from_ini()
+        # TODO import_inv_from_ini()
+        import_inv_from_ini()
     elif menu_entry_index == 2:
         manually_add_host()
     elif menu_entry_index == 3:
         main_menu()
 
-def import_from_yaml():
+
+def import_links_menu():
+    """Menu to import connections from containerlab topology style YAML."""
+    options = ["[c] Import from Containerlab Topology YAML", "[b] Back to Main Menu"]
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Import Links")
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == 0:
+        import_links_from_containerlab()
+    elif menu_entry_index == 1:
+        main_menu()
+
+def import_links_from_containerlab():
+    """Function to import links from a Containerlab topology YAML file."""
+    default_yaml_file = find_topology_yml()
+    if default_yaml_file:
+        print(f"Default topology file found: {default_yaml_file}")
+        use_default = input(f"Do you want to use the default topology file? (y/n): ").strip().lower()
+        if use_default == 'y':
+            yaml_file = default_yaml_file
+        else:
+            yaml_file = input("What is the path of your Containerlab topology file? ")
+    else:
+        yaml_file = input("What is the path of your Containerlab topology file? ")
+
+    if not yaml_file:
+        print("No topology file provided.")
+        return
+
+    try:
+        with open(yaml_file, 'r') as file:
+            data = yaml.safe_load(file)
+            links = data.get('topology', {}).get('links', [])
+            links_added = []
+            for link in links:
+                endpoints = link.get('endpoints', [])
+                if len(endpoints) == 2:
+                    source = endpoints[0].split(':')
+                    destination = endpoints[1].split(':')
+                    if len(source) == 2 and len(destination) == 2:
+                        source_host, source_interface = source
+                        destination_host, destination_interface = destination
+                        new_link = Link(
+                            source_host=source_host,
+                            source_interface=source_interface,
+                            destination_host=destination_host,
+                            destination_interface=destination_interface
+                        )
+                        session.add(new_link)
+                        links_added.append(new_link)
+            session.commit()
+            print(tabulate([[link.source_host, link.source_interface, link.destination_host, link.destination_interface] for link in links_added], headers=["Source Host", "Source Interface", "Destination Host", "Destination Interface"]))
+    except FileNotFoundError:
+        print(f"File {yaml_file} not found.")
+    except yaml.YAMLError as exc:
+        print(f"Error parsing YAML file: {exc}")
+    main_menu()
+
+
+def import_inv_from_yaml():
     """Function to import hosts from an Ansible YAML inventory file."""
-    #Name of file to open
-    yaml_file = input("What is the name of your inventory file? ")
+    default_yaml_file = find_ansible_inventory_yml()
+    if default_yaml_file:
+        print(f"Default inventory file found: {default_yaml_file}")
+        use_default = input(f"Do you want to use the default inventory file? (y/n): ").strip().lower()
+        if use_default == 'y':
+            yaml_file = default_yaml_file
+        else:
+            yaml_file = input("What is the path to your inventory file? ")
+    else:
+        yaml_file = input("What is the path to your inventory file? ")
+
+    if not yaml_file:
+        print("No inventory file provided.")
+        return
+
     try:
         with open(yaml_file, 'r') as file:
             data = yaml.safe_load(file)
             children = data.get('all', {}).get('children', {})
+            hosts_added = []
             for group, group_data in children.items():
                 vars = group_data.get('vars', {})
                 hosts = group_data.get('hosts', {})
                 for hostname, host_data in hosts.items():
+                    image_type = group
+                    network_os = "junos" if "junos" in image_type else vars.get('ansible_network_os', '')
                     new_host = Host(
                         hostname=hostname,
                         ip_address=host_data.get('ansible_host', ''),
-                        network_os=vars.get('ansible_network_os', ''),
+                        network_os=network_os,
                         connection=vars.get('ansible_connection', ''),
                         username=vars.get('ansible_user', ''),
-                        password=vars.get('ansible_password', '')
+                        password=vars.get('ansible_password', ''),
+                        image_type=image_type
                     )
                     session.add(new_host)
-            #Save chanages to hosts.db
+                    hosts_added.append(new_host)
+            # Save changes to hosts.db
             session.commit()
-            print("Hosts added to the database.")
+            print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
     except IntegrityError:
-        #Used to prevent having the same host added to the database
+        # Used to prevent having the same host added to the database
         session.rollback()
         print("Duplicate host found. Rolling back changes.")
     except Exception as e:
@@ -91,7 +173,7 @@ def manually_add_host():
             connection=connection,
             username=username,
             password=password
-        )
+            )
         session.add(new_host)
         session.commit()
         print(f"Host {hostname} added to the database.")
@@ -101,33 +183,46 @@ def manually_add_host():
         print(f"Host {hostname} already exists in the database.")
     main_menu()
 
-def import_from_ini():
+def import_inv_from_ini():
     """Function to import hosts from an Ansible INI inventory file."""
-    ini_file = input("What is the name of your inventory file? ")
-    config = configparser.ConfigParser()
+    default_ini_file = find_ansible_inventory_ini()
+    if default_ini_file:
+        print(f"Default inventory file found: {default_ini_file}")
+        use_default = input(f"Do you want to use the default inventory file? (y/n): ").strip().lower()
+        if use_default == 'y':
+            ini_file = default_ini_file
+        else:
+            ini_file = input("What is the path of your inventory file? ")
+    else:
+        ini_file = input("What is the path of your inventory file? ")
+
+    if not ini_file:
+        print("No inventory file provided.")
+        return
+
+    hosts_added = []
     try:
+        config = ConfigParser()
         config.read(ini_file)
         for section in config.sections():
-            if section.endswith(":vars"):
-                continue  # Skip the vars section
-            vars_section = section + ":vars"
-            vars = config[vars_section] if vars_section in config else {}
-            for item in config.items(section):
-                hostname = item[0].split()[0]
-                host_info = item[1].split()
-                ip_address = host_info[0].split('=')[1] if '=' in host_info[0] else host_info[0]
+            for hostname, ip_address in config.items(section):
+                network_os = "junos" if "junos" in section else section
                 new_host = Host(
                     hostname=hostname,
                     ip_address=ip_address,
-                    network_os=vars.get('ansible_network_os', ''),
-                    connection=vars.get('ansible_connection', ''),
-                    username=vars.get('ansible_user', ''),
-                    password=vars.get('ansible_password', '')
+                    network_os=network_os,
+                    connection=config.get(section, 'ansible_connection', fallback=''),
+                    username=config.get(section, 'ansible_user', fallback=''),
+                    password=config.get(section, 'ansible_password', fallback=''),
+                    image_type=section
                 )
                 session.add(new_host)
+                hosts_added.append(new_host)
+        # Save changes to hosts.db
         session.commit()
-        print("Hosts added to the database.")
+        print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
     except IntegrityError:
+        # Used to prevent having the same host added to the database
         session.rollback()
         print("Duplicate host found. Rolling back changes.")
     except Exception as e:
@@ -148,21 +243,64 @@ def connect_host_menu():
     else:
         connect_to_host(hosts[menu_entry_index].hostname)
 
-def connect_to_host(hostname):
-    """Function to connect to a host via SSH."""
-    #Query info about host from the database
+def connect_to_host(hostname, command=None, return_to_main_menu=True):
+    """Function to connect to a host via SSH and optionally run a command."""
+    # Query info about host from the database
     host = session.query(Host).filter_by(hostname=hostname).first()
     if host:
         print(f"Connecting to {hostname} via SSH...")
         try:
-            #Clearing the terminal and then connecting via SSH to host
-            #clear_screen()
-            ssh_command = f"ssh -o StrictHostKeyChecking=no {host.username}@{host.ip_address}"
+            password = host.password if host.password else getpass.getpass(prompt=f"Enter password for {host.username}@{host.ip_address}: ")
+            ssh_command = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no {host.username}@{host.ip_address}"
+            if command:
+                ssh_command += f" '{command}'"
             subprocess.run(ssh_command, shell=True)
         except Exception as e:
             print(f"Failed to connect: {e}")
     else:
         print(f"Host {hostname} not found in the database.")
+    
+    if return_to_main_menu:
+        main_menu()
+
+def list_files(directory="."):
+    return (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
+
+def preview_and_run_playbook_menu():
+    """Menu to preview files and run ansible-playbook."""
+    files = []
+    for f in os.listdir('.'):
+        if os.path.isfile(f):
+            files.append(f)
+    options = []
+    for i, file in enumerate(files, start=1):
+        options.append(f"[{i}] {file}")
+    options.append("[b] Back to Main Menu")
+    
+    def preview_command(file):
+        """Function to preview the contents of a file."""
+        try:
+            with open(file, 'r') as f:
+                return f.read()
+        except Exception:
+            return ""  # Return an empty string if the file can't be read
+
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), preview_command=preview_command)
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == len(options) - 1:
+        main_menu()
+    else:
+        selected_file = files[menu_entry_index]
+        run_ansible_playbook(selected_file)
+
+def run_ansible_playbook(file):
+    """Function to run ansible-playbook with the selected file and arguments."""
+    args = input("Enter any additional arguments for ansible-playbook: ")
+    command = f"ansible-playbook {file} {args}"
+    try:
+        subprocess.run(command, shell=True)
+    except Exception as e:
+        print(f"Failed to run ansible-playbook: {e}")
     main_menu()
 
 def list_files(directory="."):
@@ -208,6 +346,243 @@ def run_ansible_playbook(file):
 def clear_screen():
     """Function to clear the screen. Used this when other TUI was used. Not needed for simple_term_menu."""
     os.system('clear' if os.name == 'posix' else 'cls')
+
+def find_ansible_inventory_yml():
+    """Function to find ansible-inventory.yml in the current directory or clab folder in the parent directory."""
+    current_dir = os.getcwd()
+    ansible_inventory_yml = os.path.join(current_dir, 'ansible-inventory.yml')
+    
+    if os.path.isfile(ansible_inventory_yml):
+        return ansible_inventory_yml
+    
+    parent_dir = os.path.dirname(current_dir)
+    for item in os.listdir(parent_dir):
+        if item.startswith('clab') and os.path.isdir(os.path.join(parent_dir, item)):
+            clab_dir = os.path.join(parent_dir, item)
+            ansible_inventory_yml = os.path.join(clab_dir, 'ansible-inventory.yml')
+            if os.path.isfile(ansible_inventory_yml):
+                return ansible_inventory_yml
+    
+    return None
+
+def find_ansible_inventory_ini():
+    """Function to find ansible-inventory.ini in the current directory or parent directory."""
+    current_dir = os.getcwd()
+    ansible_inventory_ini = os.path.join(current_dir, 'ansible-inventory.ini')
+    
+    if os.path.isfile(ansible_inventory_ini):
+        return ansible_inventory_ini
+    
+    parent_dir = os.path.dirname(current_dir)
+    ansible_inventory_ini = os.path.join(parent_dir, 'ansible-inventory.ini')
+    
+    if os.path.isfile(ansible_inventory_ini):
+        return ansible_inventory_ini
+    
+    return None
+
+def find_topology_yml():
+    """Function to find topology.yml in the current directory or parent directory."""
+    current_dir = os.getcwd()
+    topology_yml = os.path.join(current_dir, 'topology.yml')
+    
+    if os.path.isfile(topology_yml):
+        return topology_yml
+    
+    parent_dir = os.path.dirname(current_dir)
+    topology_yml = os.path.join(parent_dir, 'topology.yml')
+    
+    if os.path.isfile(topology_yml):
+        return topology_yml
+    
+    return None
+
+def interface_management_menu():
+    """Menu for interface management."""
+    options = ["[e] Enable or Disable Interfaces", "[i] Impair Interfaces", "[b] Back to Main Menu"]
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Interface Management")
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == 0:
+        enable_disable_interfaces_menu()
+    elif menu_entry_index == 1:
+        impair_interfaces_menu()
+    elif menu_entry_index == 2:
+        main_menu()
+
+def enable_disable_interfaces_menu():
+    """Menu to enable or disable network interfaces."""
+    links = session.query(Link).all()
+    options = [f"{link.source_host}:{link.source_interface} -> {link.destination_host}:{link.destination_interface} (State: {link.state})" for link in links]
+    options.append("[b] Back to Interface Management")
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Enable or Disable Interfaces")
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == len(options) - 1:
+        interface_management_menu()
+    else:
+        selected_link = links[menu_entry_index]
+        manage_interface(selected_link)
+        enable_disable_interfaces_menu()  # Return to the enable/disable interfaces menu after execution
+
+def impair_interfaces_menu():
+    """Menu to impair network interfaces."""
+    links = session.query(Link).all()
+    options = []
+    for link in links:
+        impairments = []
+        if link.jitter != 0:
+            impairments.append(f"Jitter: {link.jitter}ms")
+        if link.latency != 0:
+            impairments.append(f"Latency: {link.latency}ms")
+        if link.loss != 0:
+            impairments.append(f"Loss: {link.loss}%")
+        if link.rate != 0:
+            impairments.append(f"Rate: {link.rate}kbit/s")
+        if link.corruption != 0:
+            impairments.append(f"Corruption: {link.corruption}%")
+        impairments_str = ", ".join(impairments) if impairments else "No impairments"
+        options.append(f"{link.source_host}:{link.source_interface} -> {link.destination_host}:{link.destination_interface} ({impairments_str})")
+    options.append("[b] Back to Interface Management")
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Impair Interfaces")
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == len(options) - 1:
+        interface_management_menu()
+    else:
+        selected_link = links[menu_entry_index]
+        manage_impairment(selected_link)
+        impair_interfaces_menu()  # Return to the impair interfaces menu after execution
+
+def manage_impairment(link):
+    """Function to manage impairments on a network interface."""
+    impairments = {
+        "jitter": link.jitter,
+        "latency": link.latency,
+        "loss": link.loss,
+        "rate": link.rate,
+        "corruption": link.corruption
+    }
+    non_zero_impairments = {k: v for k, v in impairments.items() if v != 0}
+    if non_zero_impairments:
+        print(f"Current impairments on {link.source_host}:{link.source_interface} -> {link.destination_host}:{link.destination_interface}:")
+        for k, v in non_zero_impairments.items():
+            print(f"{k.capitalize()}: {v}")
+        remove = input("Do you want to remove the impairments? (y/n): ").strip().lower()
+        if remove == 'y':
+            link.jitter = 0
+            link.latency = 0
+            link.loss = 0
+            link.rate = 0
+            link.corruption = 0
+            session.add(link)
+            session.commit()
+            print("Impairments removed.")
+            apply_impairments(link)
+            return
+
+    options = ["[d] Delay and Jitter", "[l] Latency", "[o] Loss", "[r] Rate", "[c] Corruption", "[b] Back to Impair Interfaces"]
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Set Impairments")
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == len(options) - 1:
+        impair_interfaces_menu()
+    else:
+        if menu_entry_index == 0:
+            link.latency = int(input("Enter delay value (ms): ").strip())
+            link.jitter = int(input("Enter jitter value (ms): ").strip())
+        elif menu_entry_index == 1:
+            link.latency = int(input("Enter latency value (ms): ").strip())
+        elif menu_entry_index == 2:
+            link.loss = int(input("Enter loss value (%): ").strip())
+        elif menu_entry_index == 3:
+            link.rate = int(input("Enter rate value (kbit/s): ").strip())
+        elif menu_entry_index == 4:
+            link.corruption = int(input("Enter corruption value (%): ").strip())
+        session.add(link)
+        session.commit()
+        print("Impairment set.")
+        apply_impairments(link)  # Apply the impairments after setting them
+        manage_impairment(link)  # Return to the manage impairment menu after setting an impairment
+
+def apply_impairments(link):
+    """Function to apply impairments to a network interface using containerlab tools netem set."""
+    host = session.query(Host).filter(Host.hostname.contains(link.source_host)).first()
+    if not host:
+        print(f"Host {link.source_host} not found in the database.")
+        return
+
+    command = f"sudo containerlab tools netem set -n {host.hostname} -i {link.source_interface}"
+    if link.latency > 0:
+        command += f" --delay {link.latency}ms"
+    if link.jitter > 0:
+        command += f" --jitter {link.jitter}ms"
+    if link.loss > 0:
+        command += f" --loss {link.loss}"
+    if link.rate > 0:
+        command += f" --rate {link.rate}"
+    if link.corruption > 0:
+        command += f" --corruption {link.corruption}"
+
+    print(f"Applying impairments with command: {command}")
+    try:
+        subprocess.run(command, shell=True)
+        print("Impairments applied successfully.")
+    except Exception as e:
+        print(f"Failed to apply impairments: {e}")
+
+def connect_to_host(hostname, command=None, return_to_main_menu=True):
+    """Function to connect to a host via SSH and optionally run a command."""
+    # Query info about host from the database
+    host = session.query(Host).filter_by(hostname=hostname).first()
+    if host:
+        print(f"Connecting to {hostname} via SSH...")
+        try:
+            password = host.password if host.password else getpass.getpass(prompt=f"Enter password for {host.username}@{host.ip_address}: ")
+            ssh_command = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no {host.username}@{host.ip_address}"
+            if command:
+                ssh_command += f" '{command}'"
+            subprocess.run(ssh_command, shell=True)
+        except Exception as e:
+            print(f"Failed to connect: {e}")
+    else:
+        print(f"Host {hostname} not found in the database.")
+    
+    if return_to_main_menu:
+        main_menu()
+
+def manage_interface(link):
+    """Function to enable or disable a network interface."""
+    host = session.query(Host).filter(Host.hostname.contains(link.source_host)).first()
+    if not host:
+        print(f"Host {link.source_host} not found in the database.")
+        enable_disable_interfaces_menu()
+        return
+
+    print(f"Managing interface {link.source_interface} on {link.source_host}...")
+    action = "disable" if link.state == "enabled" else "enable"
+    
+    if host.network_os == "linux":
+        command = f"ip link set {link.source_interface} {action}"
+    elif host.network_os == "junos":
+        command = f"configure; set interfaces {link.source_interface} {action}; commit and-quit"
+    else:
+        print(f"Unsupported network OS: {host.network_os}")
+        enable_disable_interfaces_menu()
+        return
+
+    print(f"Command to be executed: {command}")
+
+    try:
+        connect_to_host(host.hostname, command, return_to_main_menu=False)
+        link.state = "disabled" if link.state == "enabled" else "enabled"
+        session.add(link)  # Mark the link object as dirty
+        session.commit()
+        # Verify the update by querying the database
+        updated_link = session.query(Link).filter_by(id=link.id).first()
+        print(f"Verified link state in database: {updated_link.state}")
+        print(f"Interface {link.source_interface} on {link.source_host} has been {link.state}.")
+    except Exception as e:
+        print(f"Failed to manage interface: {e}")
+        session.rollback()  # Rollback in case of an error
+
+    enable_disable_interfaces_menu()
 
 if __name__ == "__main__":
     main_menu()
