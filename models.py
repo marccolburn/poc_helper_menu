@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -25,5 +25,11 @@ class Link(Base):
     source_interface = Column(String, nullable=False)
     destination_host = Column(String, nullable=False)
     destination_interface = Column(String, nullable=False)
+    jitter = Column(Integer, default=0, nullable=False)
+    latency = Column(Integer, default=0, nullable=False)
+    loss = Column(Integer, default=0, nullable=False)
+    rate = Column(Integer, default=0, nullable=False)
+    corruption = Column(Integer, default=0, nullable=False)
+    state = Column(String, default='enabled', nullable=False)
 
 Base.metadata.create_all(engine)
