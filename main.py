@@ -132,7 +132,7 @@ def import_inv_from_yaml():
                 hosts = group_data.get('hosts', {})
                 for hostname, host_data in hosts.items():
                     image_type = group
-                    network_os = "junos" if "junos" in image_type else vars.get('ansible_network_os', '')
+                    network_os = "junos" if "junos" in image_type else 'linux' if 'linux' in image_type else vars.get('ansible_network_os', '')
                     new_host = Host(
                         hostname=hostname,
                         ip_address=host_data.get('ansible_host', ''),
@@ -176,7 +176,7 @@ def manually_add_host():
             )
         session.add(new_host)
         session.commit()
-        print(f"Host {hostname} added to the database.")
+        print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
     except IntegrityError:
         #Used to prevent having the same host added to the database
         session.rollback()
@@ -206,7 +206,7 @@ def import_inv_from_ini():
         config.read(ini_file)
         for section in config.sections():
             for hostname, ip_address in config.items(section):
-                network_os = "junos" if "junos" in section else section
+                network_os = "junos" if "junos" in section else 'linux' if 'linux' in section else section
                 new_host = Host(
                     hostname=hostname,
                     ip_address=ip_address,
@@ -242,26 +242,6 @@ def connect_host_menu():
         main_menu()
     else:
         connect_to_host(hosts[menu_entry_index].hostname)
-
-def connect_to_host(hostname, command=None, return_to_main_menu=True):
-    """Function to connect to a host via SSH and optionally run a command."""
-    # Query info about host from the database
-    host = session.query(Host).filter_by(hostname=hostname).first()
-    if host:
-        print(f"Connecting to {hostname} via SSH...")
-        try:
-            password = host.password if host.password else getpass.getpass(prompt=f"Enter password for {host.username}@{host.ip_address}: ")
-            ssh_command = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no {host.username}@{host.ip_address}"
-            if command:
-                ssh_command += f" '{command}'"
-            subprocess.run(ssh_command, shell=True)
-        except Exception as e:
-            print(f"Failed to connect: {e}")
-    else:
-        print(f"Host {hostname} not found in the database.")
-    
-    if return_to_main_menu:
-        main_menu()
 
 def list_files(directory="."):
     return (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
@@ -420,7 +400,7 @@ def enable_disable_interfaces_menu():
         interface_management_menu()
     else:
         selected_link = links[menu_entry_index]
-        manage_interface(selected_link)
+        enable_disable_interfaces(selected_link)
         enable_disable_interfaces_menu()  # Return to the enable/disable interfaces menu after execution
 
 def impair_interfaces_menu():
@@ -534,8 +514,9 @@ def connect_to_host(hostname, command=None, return_to_main_menu=True):
     if host:
         print(f"Connecting to {hostname} via SSH...")
         try:
-            password = host.password if host.password else getpass.getpass(prompt=f"Enter password for {host.username}@{host.ip_address}: ")
-            ssh_command = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no {host.username}@{host.ip_address}"
+            username = host.username if host.username else input(f"Enter username for {hostname}: ").strip()
+            password = host.password if host.password else getpass.getpass(prompt=f"Enter password for {username}@{host.ip_address}: ")
+            ssh_command = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {username}@{host.ip_address}"
             if command:
                 ssh_command += f" '{command}'"
             subprocess.run(ssh_command, shell=True)
@@ -543,43 +524,117 @@ def connect_to_host(hostname, command=None, return_to_main_menu=True):
             print(f"Failed to connect: {e}")
     else:
         print(f"Host {hostname} not found in the database.")
+        username = input(f"Enter username for {hostname}: ").strip()
+        password = getpass.getpass(prompt=f"Enter password for {username}@{hostname}: ")
+        ip_address = input(f"Enter IP address for {hostname}: ").strip()
+        ssh_command = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {username}@{ip_address}"
+        if command:
+            ssh_command += f" '{command}'"
+        try:
+            subprocess.run(ssh_command, shell=True)
+        except Exception as e:
+            print(f"Failed to connect: {e}")
     
     if return_to_main_menu:
         main_menu()
 
-def manage_interface(link):
-    """Function to enable or disable a network interface."""
-    host = session.query(Host).filter(Host.hostname.contains(link.source_host)).first()
-    if not host:
-        print(f"Host {link.source_host} not found in the database.")
+def enable_disable_interfaces(link):
+    """Function to enable or disable both the source and destination network interfaces.
+    
+    This is being done because the abstraction of running a VM inside of a container prevents the interface state from being detected.
+    
+    If you want to manage the interfaces of a physical device, or another system that does not have this limitation
+    
+    you can use the following code:
+
+    ```
+    def enable_disable_interfaces(link):
+        #Function to enable or disable a network interface.
+        host = session.query(Host).filter(Host.hostname.contains(link.source_host)).first()
+        if not host:
+            print(f"Host {link.source_host} not found in the database.")
+            enable_disable_interfaces_menu()
+            return
+
+        print(f"Managing interface {link.source_interface} on {link.source_host}...")
+        action = "disable" if link.state == "enabled" else "enable"
+
+        if host.network_os == "linux":
+            command = f"ip link set {link.source_interface} {'up' if action == 'enable' else 'down'}"
+        elif host.network_os == "junos":
+            command = f"configure; set interfaces {link.source_interface} {action}; commit and-quit"
+        else:
+            print(f"Unsupported network OS: {host.network_os}")
+            enable_disable_interfaces_menu()
+            return
+
+        print(f"Command to be executed: {command}")
+
+        try:
+            connect_to_host(host.hostname, command, return_to_main_menu=False)
+            link.state = "disabled" if link.state == "enabled" else "enabled"
+            session.add(link)  # Mark the link object as dirty
+            session.commit()
+            # Verify the update by querying the database
+            updated_link = session.query(Link).filter_by(id=link.id).first()
+            print(f"Verified link state in database: {updated_link.state}")
+            print(f"Interface {link.source_interface} on {link.source_host} has been {link.state}.")
+        except Exception as e:
+            print(f"Failed to manage interface: {e}")
+            session.rollback()  # Rollback in case of an error
+
+        enable_disable_interfaces_menu()
+    ```
+    """
+    source_host = session.query(Host).filter(Host.hostname.contains(link.source_host)).first()
+    destination_host = session.query(Host).filter(Host.hostname.contains(link.destination_host)).first()
+    
+    if not source_host:
+        print(f"Source host {link.source_host} not found in the database.")
         enable_disable_interfaces_menu()
         return
 
-    print(f"Managing interface {link.source_interface} on {link.source_host}...")
+    if not destination_host:
+        print(f"Destination host {link.destination_host} not found in the database.")
+        enable_disable_interfaces_menu()
+        return
+
+    print(f"Managing interface {link.source_interface} on {link.source_host} and {link.destination_interface} on {link.destination_host}...")
     action = "disable" if link.state == "enabled" else "enable"
     
-    if host.network_os == "linux":
-        command = f"ip link set {link.source_interface} {action}"
-    elif host.network_os == "junos":
-        command = f"configure; set interfaces {link.source_interface} {action}; commit and-quit"
+    if source_host.network_os == "linux":
+        source_command = f"ip link set {link.source_interface} {'up' if action == 'enable' else 'down'}"
+    elif source_host.network_os == "junos":
+        source_command = f"configure; set interfaces {link.source_interface} {action}; commit and-quit"
     else:
-        print(f"Unsupported network OS: {host.network_os}")
+        print(f"Unsupported network OS: {source_host.network_os}")
         enable_disable_interfaces_menu()
         return
 
-    print(f"Command to be executed: {command}")
+    if destination_host.network_os == "linux":
+        destination_command = f"ip link set {link.destination_interface} {'up' if action == 'enable' else 'down'}"
+    elif destination_host.network_os == "junos":
+        destination_command = f"configure; set interfaces {link.destination_interface} {action}; commit and-quit"
+    else:
+        print(f"Unsupported network OS: {destination_host.network_os}")
+        enable_disable_interfaces_menu()
+        return
+
+    print(f"Source command to be executed: {source_command}")
+    print(f"Destination command to be executed: {destination_command}")
 
     try:
-        connect_to_host(host.hostname, command, return_to_main_menu=False)
+        connect_to_host(source_host.hostname, source_command, return_to_main_menu=False)
+        connect_to_host(destination_host.hostname, destination_command, return_to_main_menu=False)
         link.state = "disabled" if link.state == "enabled" else "enabled"
         session.add(link)  # Mark the link object as dirty
         session.commit()
         # Verify the update by querying the database
         updated_link = session.query(Link).filter_by(id=link.id).first()
         print(f"Verified link state in database: {updated_link.state}")
-        print(f"Interface {link.source_interface} on {link.source_host} has been {link.state}.")
+        print(f"Interfaces {link.source_interface} on {link.source_host} and {link.destination_interface} on {link.destination_host} have been {link.state}.")
     except Exception as e:
-        print(f"Failed to manage interface: {e}")
+        print(f"Failed to manage interfaces: {e}")
         session.rollback()  # Rollback in case of an error
 
     enable_disable_interfaces_menu()
