@@ -128,6 +128,8 @@ def import_inv_from_yaml():
             children = data.get('all', {}).get('children', {})
             hosts_added = []
             for group, group_data in children.items():
+                if group == 'bridge':
+                    continue
                 vars = group_data.get('vars', {})
                 hosts = group_data.get('hosts', {})
                 for hostname, host_data in hosts.items():
@@ -147,10 +149,11 @@ def import_inv_from_yaml():
             # Save changes to hosts.db
             session.commit()
             print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
-    except IntegrityError:
+    except IntegrityError as e:
         # Used to prevent having the same host added to the database
         session.rollback()
-        print("Duplicate host found. Rolling back changes.")
+        print(f"IntegrityError: {e}")
+        print(f"Host {hostname} already exists in the database.")
     except Exception as e:
         print(f"Failed to import from YAML: {e}")
     main_menu()
@@ -177,9 +180,10 @@ def manually_add_host():
         session.add(new_host)
         session.commit()
         print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
-    except IntegrityError:
-        #Used to prevent having the same host added to the database
+    except IntegrityError as e:
+        # Used to prevent having the same host added to the database
         session.rollback()
+        print(f"IntegrityError: {e}")
         print(f"Host {hostname} already exists in the database.")
     main_menu()
 
@@ -221,10 +225,11 @@ def import_inv_from_ini():
         # Save changes to hosts.db
         session.commit()
         print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
-    except IntegrityError:
+    except IntegrityError as e:
         # Used to prevent having the same host added to the database
         session.rollback()
-        print("Duplicate host found. Rolling back changes.")
+        print(f"IntegrityError: {e}")
+        print(f"Host {hostname} already exists in the database.")
     except Exception as e:
         print(f"Failed to import from INI: {e}")
     main_menu()
@@ -538,6 +543,8 @@ def connect_to_host(hostname, command=None, return_to_main_menu=True):
     if return_to_main_menu:
         main_menu()
 
+
+
 def enable_disable_interfaces(link):
     """Function to enable or disable both the source and destination network interfaces.
     
@@ -589,43 +596,49 @@ def enable_disable_interfaces(link):
     source_host = session.query(Host).filter(Host.hostname.contains(link.source_host)).first()
     destination_host = session.query(Host).filter(Host.hostname.contains(link.destination_host)).first()
     
+    if not source_host and not destination_host:
+        print(f"Both source host {link.source_host} and destination host {link.destination_host} not found in the database.")
+        enable_disable_interfaces_menu()
+        return
+
     if not source_host:
-        print(f"Source host {link.source_host} not found in the database.")
-        enable_disable_interfaces_menu()
-        return
+        print(f"Source host {link.source_host} not found in the database. Only managing destination interface.")
+    elif not destination_host:
+        print(f"Destination host {link.destination_host} not found in the database. Only managing source interface.")
+    else:
+        print(f"Managing interface {link.source_interface} on {link.source_host} and {link.destination_interface} on {link.destination_host}...")
 
-    if not destination_host:
-        print(f"Destination host {link.destination_host} not found in the database.")
-        enable_disable_interfaces_menu()
-        return
-
-    print(f"Managing interface {link.source_interface} on {link.source_host} and {link.destination_interface} on {link.destination_host}...")
     action = "disable" if link.state == "enabled" else "enable"
     
-    if source_host.network_os == "linux":
-        source_command = f"ip link set {link.source_interface} {'up' if action == 'enable' else 'down'}"
-    elif source_host.network_os == "junos":
-        source_command = f"configure; set interfaces {link.source_interface} {action}; commit and-quit"
-    else:
-        print(f"Unsupported network OS: {source_host.network_os}")
-        enable_disable_interfaces_menu()
-        return
+    source_command = None
+    destination_command = None
 
-    if destination_host.network_os == "linux":
-        destination_command = f"ip link set {link.destination_interface} {'up' if action == 'enable' else 'down'}"
-    elif destination_host.network_os == "junos":
-        destination_command = f"configure; set interfaces {link.destination_interface} {action}; commit and-quit"
-    else:
-        print(f"Unsupported network OS: {destination_host.network_os}")
-        enable_disable_interfaces_menu()
-        return
+    if source_host:
+        if source_host.network_os == "linux":
+            source_command = f"ip link set {link.source_interface} {'up' if action == 'enable' else 'down'}"
+        elif source_host.network_os == "junos":
+            source_command = f"configure; set interfaces {link.source_interface} {action}; commit and-quit"
+        else:
+            print(f"Unsupported network OS: {source_host.network_os}")
 
-    print(f"Source command to be executed: {source_command}")
-    print(f"Destination command to be executed: {destination_command}")
+    if destination_host:
+        if destination_host.network_os == "linux":
+            destination_command = f"ip link set {link.destination_interface} {'up' if action == 'enable' else 'down'}"
+        elif destination_host.network_os == "junos":
+            destination_command = f"configure; set interfaces {link.destination_interface} {action}; commit and-quit"
+        else:
+            print(f"Unsupported network OS: {destination_host.network_os}")
+
+    if source_command:
+        print(f"Source command to be executed: {source_command}")
+    if destination_command:
+        print(f"Destination command to be executed: {destination_command}")
 
     try:
-        connect_to_host(source_host.hostname, source_command, return_to_main_menu=False)
-        connect_to_host(destination_host.hostname, destination_command, return_to_main_menu=False)
+        if source_command:
+            connect_to_host(source_host.hostname, source_command, return_to_main_menu=False)
+        if destination_command:
+            connect_to_host(destination_host.hostname, destination_command, return_to_main_menu=False)
         link.state = "disabled" if link.state == "enabled" else "enabled"
         session.add(link)  # Mark the link object as dirty
         session.commit()
