@@ -1,3 +1,6 @@
 __pycache__/
 venv/
 poc_helper.db
+topology.yml
+ansible_inventory.yml
+ansible_inventory.ini
