@@ -176,7 +176,7 @@ def manually_add_host():
             )
         session.add(new_host)
         session.commit()
-        print(tabulate([[host.hostname, host.ip_address, host.network_os, host.connection, host.username, host.password, host.image_type] for host in hosts_added], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password", "Image Type"]))
+        print(tabulate([[new_host.hostname, new_host.ip_address, new_host.network_os, new_host.connection, new_host.username, new_host.password]], headers=["Hostname", "IP Address", "Network OS", "Connection", "Username", "Password"]))
     except IntegrityError:
         #Used to prevent having the same host added to the database
         session.rollback()
