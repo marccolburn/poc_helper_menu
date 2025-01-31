@@ -18,6 +18,8 @@ This is a Python-based terminal application for managing and connecting to hosts
 - `simple-term-menu` for the terminal menu interface.
 - `tabulate` for tabulating data to be printed.
 
+- sshpass terminal utility
+
 ## Installation
 
 1. Clone the repository:

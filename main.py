@@ -12,7 +12,7 @@ import getpass
 
 def main_menu():
     """Main menu of the application."""
-    options = ["[i] Import Hosts", "[l] Import Links", "[c] Connect to Host", "[a] View and Run Ansible Playbooks", "[m] Interface Management", "[e] Exit"]
+    options = ["[i] Import Hosts", "[l] Import Links", "[c] Connect to Host", "[a] View and Run Ansible Playbooks", "[m] Interface Management", "[b] Backup Device Configurations", "[e] Exit"]
     terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Main Menu")
     menu_entry_index = terminal_menu.show()
     if menu_entry_index == 0:
@@ -26,6 +26,8 @@ def main_menu():
     elif menu_entry_index == 4:
         interface_management_menu()
     elif menu_entry_index == 5:
+        config_backup_menu()
+    elif menu_entry_index == 6:
         exit()
 
 def import_hosts_menu():
@@ -651,6 +653,54 @@ def enable_disable_interfaces(link):
         session.rollback()  # Rollback in case of an error
 
     enable_disable_interfaces_menu()
+
+def config_backup_menu():
+    """Menu for configuration backup."""
+    options = ["[i] Backup Individual Host", "[a] Backup All Hosts", "[b] Back to Main Menu"]
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Interface Management")
+    menu_entry_index = terminal_menu.show()
+    if menu_entry_index == 0:
+        single_host_backup_menu()
+    elif menu_entry_index == 1:
+        for host in session.query(Host).all():
+            backup_host_config(host)
+        main_menu()
+    elif menu_entry_index == 2:
+        main_menu()
+
+def single_host_backup_menu():
+    """Menu to backup the configuration of a single host."""
+    #Query all hosts and present as menu options
+    hosts = session.query(Host).all()
+    options = [f"[{i}] {host.hostname}" for i, host in enumerate(hosts, start=1)]
+    options.append("[b] Back to Backup Configuration")
+    terminal_menu = TerminalMenu(options, menu_cursor_style=('fg_red', 'bold'), menu_highlight_style=('bg_green', 'bold'), title="Backup Individual Host")
+    menu_entry_index = terminal_menu.show()
+    #Logic to handle either backing up a host or returning to the backup configuration menu
+    if menu_entry_index == len(options) - 1:
+        config_backup_menu()
+    else:
+        selected_host = hosts[menu_entry_index]
+        backup_host_config(selected_host)
+        single_host_backup_menu()  # Return to the single host backup menu after execution
+
+def backup_host_config(host):
+    """Function to backup the configuration of a host."""
+    print(f"Backing up configuration of {host.hostname}...")
+    backup_dir = "config_backups"
+    if host.network_os == "junos":
+        command = f"sshpass -p '{host.password}' scp -O -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {host.username}@{host.ip_address}:/config/juniper.conf.gz {backup_dir}/{host.hostname}_juniper.conf.gz"
+    else:
+        print(f"Unsupported network OS: {host.network_os}")
+        return
+
+    try:
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+        subprocess.run(command, shell=True)
+        print(f"Configuration of {host.hostname} backed up successfully.")
+    except Exception as e:
+        print(f"Failed to backup configuration: {e}")
 
 if __name__ == "__main__":
     main_menu()

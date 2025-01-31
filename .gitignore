@@ -3,3 +3,4 @@ venv/
 *.yml
 *.ini
 *.db
+config_backups/
