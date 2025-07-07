@@ -5,11 +5,7 @@ from models import Host, Link, Lab, session
 import imports
 import device_actions
 import lab_mgmt
-import warnings
 import interface_actions
-# This is to suppress the deprecation warning from pkg_resources being used by NAPALM
-# until NAPALM fixes it in their codebase.
-warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 
 def paginated_menu(items, page_size=9, title="Select Item", format_func=None):

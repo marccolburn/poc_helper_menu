@@ -1,6 +1,8 @@
 # POC Helper Menu
 
-A comprehensive Python-based terminal application for managing and connecting to network devices across multiple lab environments. Supports both hardware labs and containerlab environments with advanced features like remote execution, interface management, and network impairments.
+A  Python-based terminal application for managing and connecting to network
+devices across multiple lab environments. Supports both hardware labs and containerlab
+environments with remote execution, interface management, and network impairments.
 
 ## Key Features
 
@@ -15,27 +17,29 @@ A comprehensive Python-based terminal application for managing and connecting to
 
 - Import hosts from Ansible YAML or INI inventory files
 - Import network topology and links from Containerlab YAML files
-- **Remote Topology Scanning**: Automatically discover and import topology files from remote containerlab hosts
+- **Remote Topology Scanning**: Automatically discover and import topology files from
+remote containerlab hosts
 - Manual host and link entry
-- Intelligent file detection and auto-import workflows
 
 ### Connection Methods
 
 - **SSH Connections**: Direct SSH to network devices and servers
 - **Docker Exec**: Native containerlab container access (local and remote)
 - **Console/Telnet**: Hardware device console access via telnet
-- **Remote Execution**: Full support for remote containerlab hosts
+- **Remote Execution**: Supports remote containerlab hosts
 
 ### Network Management
 
 - **Interface Control**: Enable/disable network interfaces across lab topologies
-- **Network Impairments**: Add latency, jitter, packet loss, rate limiting, and corruption (containerlab)
+- **Network Impairments**: Add latency, jitter, packet loss, rate limiting, and corruption
+(containerlab)
 - **Configuration Backup**: Automated device configuration backup with NAPALM integration
 - **Ansible Integration**: Run Ansible playbooks directly from the interface
 
 ## Requirements
 
 ### Python Version
+
 - **Python < 3.13** (Required due to telnetlib dependency in NAPALM)
   - NAPALM currently requires telnetlib, which was deprecated in Python 3.13
   - This requirement will be removed once NAPALM is updated
@@ -47,7 +51,7 @@ A comprehensive Python-based terminal application for managing and connecting to
 - `simple-term-menu` - Terminal menu interface
 - `tabulate` - Data table formatting
 - `napalm` - Network device automation and configuration backup
-- `netmiko` - SSH and telnet connections to network devices
+- `netmiko` - For telnet connections to network devices
 
 ### System Utilities
 
@@ -63,13 +67,20 @@ A comprehensive Python-based terminal application for managing and connecting to
     cd poc_helper_menu
     ```
 
-2. **Install Python dependencies:**
+2. Create virtual environment
+
+    ```sh
+    python3.12 venv venv/
+    source venv/bin/activate
+    ```
+
+3. **Install Python dependencies:**
 
     ```sh
     pip install -r requirements.txt
     ```
 
-3. **Install system utilities:**
+4. **Install sshpass:**
 
     ```sh
     # On Ubuntu/Debian
@@ -82,22 +93,13 @@ A comprehensive Python-based terminal application for managing and connecting to
     brew install sshpass
     ```
 
-4. **Database Migration (if upgrading):**
-
-    ```sh
-    # If you have an existing database, migrate to support labs
-    python migrate_to_labs.py
-    ```
-
 ## Architecture
-
-The application has been refactored into a modular architecture for better maintainability:
 
 ### Core Modules
 
 - **`main.py`** - Main application entry point and menu system
 - **`models.py`** - SQLAlchemy database models and schema
-- **`imports.py`** - Import functions for various file formats and sources
+- **`imports.py`** - Import functions for hosts and links
 - **`lab_mgmt.py`** - Lab management operations (CRUD, settings)
 - **`device_actions.py`** - Device connection and configuration backup functions
 - **`interface_actions.py`** - Network interface management and impairment functions
@@ -158,7 +160,6 @@ The application uses SQLite with three main tables:
 - **Create Labs** - Set up new lab environments with type selection
 - **Select Lab** - Choose active lab for operations
 - **Manage Labs** - View, rename, delete, and configure lab settings
-- **Lab Isolation** - Complete separation of hosts, links, and operations
 
 ### Lab Configuration
 
@@ -210,7 +211,7 @@ Once a lab is selected, you can:
 
 - **Connect to Host** - SSH or docker exec to devices
 - **View and Run Ansible Playbooks** - Execute automation scripts
-- **Interface Management** - Control interfaces and impairments
+- **Interface Management** - Control interfaces and containerlab impairments
 - **Backup Device Configurations** - Save device configs via NAPALM
 
 ### Connection Types
@@ -218,28 +219,23 @@ Once a lab is selected, you can:
 #### SSH Connections
 
 - Direct SSH access to network devices and servers
-- Supports both password and key-based authentication
-- Used for hardware devices and non-containerlab environments
 
 #### Docker Exec (Containerlab)
 
-- Native container access for containerlab environments
+- Linux container access for containerlab environments
 - Supports both local and remote containerlab hosts
-- Seamless integration with containerlab workflows
 
 #### Console/Telnet Access
 
 - Hardware device console access via telnet
-- Implemented using Netmiko for reliable connections
+- Implemented using Netmiko's telnetlib library(because of 3.13 telnetlib deprecation)
 - Supports hostname:port and plain hostname formats
-- Interactive credential prompting during connection
 
 ### Network Interface Management
 
 #### Interface Control
 
 - Enable/disable network interfaces across lab topologies
-- Real-time interface state management
 - Support for both hardware and containerlab environments
 
 #### Network Impairments (Containerlab Only)
@@ -254,7 +250,7 @@ Once a lab is selected, you can:
 
 #### Device Configuration Backup
 
-- Automated backup using NAPALM integration
+- Config backup using NAPALM
 - Support for multiple network OS types
 - Local and remote containerlab directory backup
 - Individual or bulk device operations
@@ -270,16 +266,7 @@ Once a lab is selected, you can:
 ### Remote Topology Discovery
 
 - Automatic scanning of remote containerlab hosts
-- Intelligent file discovery and selection
-- Secure file transfer and processing
-- Support for complex directory structures
-
-### Pagination and Navigation
-
-- Configurable page sizes for large lists
-- Intuitive navigation controls
-- Context-aware menu systems
-- Streamlined user workflows
+- Topology file discovery and selection
 
 ## Troubleshooting
 
@@ -299,15 +286,16 @@ For remote containerlab access, ensure SSH key authentication is configured:
 ssh-copy-id username@remote-host
 ```
 
-### Missing Dependencies
-Install missing system utilities:
+### Missing Dependencies Warning or SSH fails
+
+Install sshpass:
 
 ```sh
 # Ubuntu/Debian
 sudo apt-get update && sudo apt-get install sshpass
 
 # RHEL/CentOS/Fedora  
-sudo yum install sshpass
+sudo dnf install sshpass
 
 # macOS
 brew install sshpass
@@ -315,7 +303,9 @@ brew install sshpass
 
 ## SSH Key Setup for Seamless Remote Access
 
-For the best user experience, especially during customer demonstrations, it's recommended to set up SSH key authentication and passwordless sudo for containerlab commands. This eliminates password prompts and creates a smooth workflow.
+For the best user experience, it's recommended to set up SSH key authentication and
+passwordless sudo for containerlab commands. Thiseliminates password prompts for a
+smoother demo experience.
 
 ### 1. Generate SSH Key Pair
 
@@ -329,7 +319,8 @@ ssh-keygen -t ed25519 -C "your.email@company.com"
 # When prompted for passphrase, press Enter for no passphrase (recommended for demos)
 ```
 
-**Alternative for older systems that don't support ed25519:**
+**Alternative for systems that don't support ed25519:**
+
 ```sh
 ssh-keygen -t rsa -b 4096 -C "your.email@company.com"
 ```
@@ -342,6 +333,7 @@ ssh-copy-id username@remote-containerlab-host
 ```
 
 **Manual method (if ssh-copy-id is not available):**
+
 ```sh
 # Display your public key
 cat ~/.ssh/id_ed25519.pub
@@ -364,7 +356,8 @@ ssh username@remote-containerlab-host
 
 ### 4. Configure Passwordless Sudo for Containerlab
 
-On the **remote containerlab host**, configure sudo to allow passwordless execution of containerlab commands:
+On the **remote containerlab host**, configure sudo to allow passwordless execution of
+containerlab commands:
 
 ```sh
 # Edit the sudoers file (always use visudo for safety)
@@ -388,7 +381,6 @@ ssh username@remote-host "sudo containerlab version"
 
 # This should execute without any password prompts
 ```
-
 
 ## License
 
