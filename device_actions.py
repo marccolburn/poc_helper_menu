@@ -13,6 +13,10 @@ from pathlib import Path
 from netmiko._telnetlib import telnetlib
 from napalm import get_network_driver
 from models import Host, Link, Lab, session
+import warnings
+# This is to suppress the deprecation warning from pkg_resources being used by NAPALM
+# until NAPALM fixes it in their codebase.
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 
 # NAPALM driver mapping for configuration backup
