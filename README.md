@@ -11,7 +11,7 @@ environments with remote execution, interface management, and network impairment
 - **Lab Organization**: Organize hosts and links by distinct lab environments
 - **Lab Types**: Support for both hardware labs and containerlab environments
 - **Lab Isolation**: Complete separation of hosts, links, and operations between labs
-- **Lab Management**: Create, rename, delete, and configure lab settings
+- **Lab Management**: Create, rename, delete, configure settings, and edit host/link records
 
 ### Import & Discovery
 
@@ -40,9 +40,14 @@ remote containerlab hosts
 
 ### Python Version
 
+> Note: This is now fixed in newer versions of NAPALM. Python 3.13 and newer works.
+
 - **Python < 3.13** (Required due to telnetlib dependency in NAPALM)
   - NAPALM currently requires telnetlib, which was deprecated in Python 3.13
   - This requirement will be removed once NAPALM is updated
+
+> Note: If you receive an error of "no module named pkg_resources", verify NAPALM version
+> is at least 5.0
 
 ### Python Packages
 
@@ -159,7 +164,7 @@ The application uses SQLite with three main tables:
 
 - **Create Labs** - Set up new lab environments with type selection
 - **Select Lab** - Choose active lab for operations
-- **Manage Labs** - View, rename, delete, and configure lab settings
+- **Manage Labs** - View, rename, delete, configure settings, and edit host/link records
 
 ### Lab Configuration
 
@@ -204,6 +209,15 @@ Remote capabilities include:
 - **Create Lab** - Set up new lab with guided configuration
 - **Manage Labs** - Lab administration and settings
 - **Exit** - Close the application
+
+### Manage Labs Menu
+
+- **View All Labs** - Display all labs with host/link counts and configuration
+- **Rename Lab** - Rename an existing lab
+- **Delete Lab** - Delete a lab and all associated hosts and links
+- **Manage Lab Settings** - Edit lab-level settings (type, description, remote host, topology path)
+- **Edit Lab Hosts** - Edit device information (hostname, IP, credentials, OS, image type, console)
+- **Edit Lab Links** - Edit link endpoint information (source/destination host and interface)
 
 ### Lab Operations Menu
 

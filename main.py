@@ -702,12 +702,14 @@ def lab_operations_menu():
 
 def manage_labs_menu():
     """Menu for managing labs."""
-    
+
     options = [
         "[v] View All Labs",
         "[r] Rename Lab",
         "[d] Delete Lab",
         "[s] Manage Lab Settings",
+        "[h] Edit Lab Hosts",
+        "[l] Edit Lab Links",
         "[b] Back to Main Menu",
     ]
     terminal_menu = TerminalMenu(
@@ -717,7 +719,7 @@ def manage_labs_menu():
         title="Manage Labs",
     )
     menu_entry_index = terminal_menu.show()
-    
+
     if menu_entry_index == 0:
         lab_mgmt.view_all_labs()
     elif menu_entry_index == 1:
@@ -727,6 +729,10 @@ def manage_labs_menu():
     elif menu_entry_index == 3:
         lab_mgmt.manage_lab_settings()
     elif menu_entry_index == 4:
+        lab_mgmt.edit_lab_hosts()
+    elif menu_entry_index == 5:
+        lab_mgmt.edit_lab_links()
+    elif menu_entry_index == 6:
         main_menu()
 
 
