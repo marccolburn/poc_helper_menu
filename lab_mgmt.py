@@ -377,6 +377,216 @@ def manage_lab_settings():
     manage_lab_settings()
 
 
+def edit_lab_hosts():
+    """Select a lab and host to edit host information."""
+    labs = session.query(Lab).all()
+    if not labs:
+        print("No labs available.")
+        main.manage_labs_menu()
+        return
+
+    options = [f"[{i}] {lab.lab_name} ({lab.lab_type})" for i, lab in enumerate(labs, start=1)]
+    options.append("[b] Back to Manage Labs")
+
+    terminal_menu = TerminalMenu(
+        options,
+        menu_cursor_style=("fg_red", "bold"),
+        menu_highlight_style=("bg_green", "bold"),
+        title="Select Lab to Edit Hosts",
+    )
+    menu_entry_index = terminal_menu.show()
+
+    if menu_entry_index == len(options) - 1:
+        main.manage_labs_menu()
+        return
+
+    selected_lab_obj = labs[menu_entry_index]
+    edit_host_select(selected_lab_obj.lab_name)
+
+
+def edit_host_select(lab_name):
+    """Select a host from a lab to edit."""
+    hosts = session.query(Host).filter_by(lab_name=lab_name).all()
+    if not hosts:
+        print(f"No hosts found in lab '{lab_name}'.")
+        input("Press Enter to continue...")
+        edit_lab_hosts()
+        return
+
+    options = [
+        f"[{i}] {host.hostname} ({host.ip_address})"
+        for i, host in enumerate(hosts, start=1)
+    ]
+    options.append("[b] Back")
+
+    terminal_menu = TerminalMenu(
+        options,
+        menu_cursor_style=("fg_red", "bold"),
+        menu_highlight_style=("bg_green", "bold"),
+        title=f"Select Host to Edit - Lab: {lab_name}",
+    )
+    menu_entry_index = terminal_menu.show()
+
+    if menu_entry_index == len(options) - 1:
+        edit_lab_hosts()
+        return
+
+    edit_host_fields(hosts[menu_entry_index], lab_name)
+
+
+def edit_host_fields(host, lab_name):
+    """Edit individual fields of a host."""
+    REQUIRED_FIELDS = {"hostname", "ip_address", "network_os", "username", "password", "image_type"}
+
+    field_map = [
+        ("hostname",    "Hostname"),
+        ("ip_address",  "IP Address"),
+        ("network_os",  "Network OS"),
+        ("username",    "Username"),
+        ("password",    "Password"),
+        ("image_type",  "Image Type"),
+        ("console",     "Console"),
+    ]
+
+    while True:
+        options = [
+            f"[{i+1}] {label:<12} {getattr(host, attr) or 'Not set'}"
+            for i, (attr, label) in enumerate(field_map)
+        ]
+        options.append("[b] Back to Host Selection")
+
+        terminal_menu = TerminalMenu(
+            options,
+            menu_cursor_style=("fg_red", "bold"),
+            menu_highlight_style=("bg_green", "bold"),
+            title=f"Edit Host: {host.hostname} - Lab: {lab_name}",
+        )
+        menu_entry_index = terminal_menu.show()
+
+        if menu_entry_index == len(options) - 1:
+            edit_host_select(lab_name)
+            return
+
+        attr, label = field_map[menu_entry_index]
+        current_val = getattr(host, attr) or "Not set"
+        print(f"Current {label}: {current_val}")
+        new_val = input(f"Enter new {label} (press Enter to keep current): ").strip()
+
+        if not new_val:
+            print(f"{label} unchanged.")
+            continue
+
+        if not new_val and attr in REQUIRED_FIELDS:
+            print(f"{label} is required and cannot be empty.")
+            continue
+
+        setattr(host, attr, new_val if new_val else None)
+        session.commit()
+        print(f"{label} updated successfully.")
+
+
+def edit_lab_links():
+    """Select a lab and link to edit link endpoint information."""
+    labs = session.query(Lab).all()
+    if not labs:
+        print("No labs available.")
+        main.manage_labs_menu()
+        return
+
+    options = [f"[{i}] {lab.lab_name} ({lab.lab_type})" for i, lab in enumerate(labs, start=1)]
+    options.append("[b] Back to Manage Labs")
+
+    terminal_menu = TerminalMenu(
+        options,
+        menu_cursor_style=("fg_red", "bold"),
+        menu_highlight_style=("bg_green", "bold"),
+        title="Select Lab to Edit Links",
+    )
+    menu_entry_index = terminal_menu.show()
+
+    if menu_entry_index == len(options) - 1:
+        main.manage_labs_menu()
+        return
+
+    selected_lab_obj = labs[menu_entry_index]
+    edit_link_select(selected_lab_obj.lab_name)
+
+
+def edit_link_select(lab_name):
+    """Select a link from a lab to edit."""
+    links = session.query(Link).filter_by(lab_name=lab_name).all()
+    if not links:
+        print(f"No links found in lab '{lab_name}'.")
+        input("Press Enter to continue...")
+        edit_lab_links()
+        return
+
+    options = [
+        f"[{i}] {link.source_host}:{link.source_interface} -> "
+        f"{link.destination_host}:{link.destination_interface}"
+        for i, link in enumerate(links, start=1)
+    ]
+    options.append("[b] Back")
+
+    terminal_menu = TerminalMenu(
+        options,
+        menu_cursor_style=("fg_red", "bold"),
+        menu_highlight_style=("bg_green", "bold"),
+        title=f"Select Link to Edit - Lab: {lab_name}",
+    )
+    menu_entry_index = terminal_menu.show()
+
+    if menu_entry_index == len(options) - 1:
+        edit_lab_links()
+        return
+
+    edit_link_fields(links[menu_entry_index], lab_name)
+
+
+def edit_link_fields(link, lab_name):
+    """Edit source and destination fields of a link."""
+    field_map = [
+        ("source_host",            "Source Host"),
+        ("source_interface",       "Source Interface"),
+        ("destination_host",       "Destination Host"),
+        ("destination_interface",  "Destination Interface"),
+    ]
+
+    while True:
+        options = [
+            f"[{i+1}] {label:<24} {getattr(link, attr)}"
+            for i, (attr, label) in enumerate(field_map)
+        ]
+        options.append("[b] Back to Link Selection")
+
+        terminal_menu = TerminalMenu(
+            options,
+            menu_cursor_style=("fg_red", "bold"),
+            menu_highlight_style=("bg_green", "bold"),
+            title=(
+                f"Edit Link: {link.source_host}:{link.source_interface} -> "
+                f"{link.destination_host}:{link.destination_interface} - Lab: {lab_name}"
+            ),
+        )
+        menu_entry_index = terminal_menu.show()
+
+        if menu_entry_index == len(options) - 1:
+            edit_link_select(lab_name)
+            return
+
+        attr, label = field_map[menu_entry_index]
+        print(f"Current {label}: {getattr(link, attr)}")
+        new_val = input(f"Enter new {label} (press Enter to keep current): ").strip()
+
+        if not new_val:
+            print(f"{label} unchanged.")
+            continue
+
+        setattr(link, attr, new_val)
+        session.commit()
+        print(f"{label} updated successfully.")
+
+
 def get_selected_lab():
     """Get the currently selected lab."""
     return selected_lab

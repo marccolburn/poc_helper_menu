@@ -7,3 +7,4 @@ config_backups/
 _test*.py
 _todo.txt
 *_config_backup/
+.DS_Store
