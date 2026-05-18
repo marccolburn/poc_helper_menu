@@ -385,22 +385,20 @@ def edit_lab_hosts():
         main.manage_labs_menu()
         return
 
-    options = [f"[{i}] {lab.lab_name} ({lab.lab_type})" for i, lab in enumerate(labs, start=1)]
-    options.append("[b] Back to Manage Labs")
+    def format_lab(idx, lab):
+        return f"[{idx + 1}] {lab.lab_name} ({lab.lab_type})"
 
-    terminal_menu = TerminalMenu(
-        options,
-        menu_cursor_style=("fg_red", "bold"),
-        menu_highlight_style=("bg_green", "bold"),
+    selected_lab_obj = main.paginated_menu(
+        labs,
+        page_size=9,
         title="Select Lab to Edit Hosts",
+        format_func=format_lab,
     )
-    menu_entry_index = terminal_menu.show()
 
-    if menu_entry_index == len(options) - 1:
+    if selected_lab_obj is None:
         main.manage_labs_menu()
         return
 
-    selected_lab_obj = labs[menu_entry_index]
     edit_host_select(selected_lab_obj.lab_name)
 
 
@@ -413,25 +411,21 @@ def edit_host_select(lab_name):
         edit_lab_hosts()
         return
 
-    options = [
-        f"[{i}] {host.hostname} ({host.ip_address})"
-        for i, host in enumerate(hosts, start=1)
-    ]
-    options.append("[b] Back")
+    def format_host(idx, host):
+        return f"[{idx + 1}] {host.hostname} ({host.ip_address})"
 
-    terminal_menu = TerminalMenu(
-        options,
-        menu_cursor_style=("fg_red", "bold"),
-        menu_highlight_style=("bg_green", "bold"),
+    selected_host = main.paginated_menu(
+        hosts,
+        page_size=9,
         title=f"Select Host to Edit - Lab: {lab_name}",
+        format_func=format_host,
     )
-    menu_entry_index = terminal_menu.show()
 
-    if menu_entry_index == len(options) - 1:
+    if selected_host is None:
         edit_lab_hosts()
         return
 
-    edit_host_fields(hosts[menu_entry_index], lab_name)
+    edit_host_fields(selected_host, lab_name)
 
 
 def edit_host_fields(host, lab_name):
@@ -493,22 +487,20 @@ def edit_lab_links():
         main.manage_labs_menu()
         return
 
-    options = [f"[{i}] {lab.lab_name} ({lab.lab_type})" for i, lab in enumerate(labs, start=1)]
-    options.append("[b] Back to Manage Labs")
+    def format_lab(idx, lab):
+        return f"[{idx + 1}] {lab.lab_name} ({lab.lab_type})"
 
-    terminal_menu = TerminalMenu(
-        options,
-        menu_cursor_style=("fg_red", "bold"),
-        menu_highlight_style=("bg_green", "bold"),
+    selected_lab_obj = main.paginated_menu(
+        labs,
+        page_size=9,
         title="Select Lab to Edit Links",
+        format_func=format_lab,
     )
-    menu_entry_index = terminal_menu.show()
 
-    if menu_entry_index == len(options) - 1:
+    if selected_lab_obj is None:
         main.manage_labs_menu()
         return
 
-    selected_lab_obj = labs[menu_entry_index]
     edit_link_select(selected_lab_obj.lab_name)
 
 
@@ -521,26 +513,24 @@ def edit_link_select(lab_name):
         edit_lab_links()
         return
 
-    options = [
-        f"[{i}] {link.source_host}:{link.source_interface} -> "
-        f"{link.destination_host}:{link.destination_interface}"
-        for i, link in enumerate(links, start=1)
-    ]
-    options.append("[b] Back")
+    def format_link(idx, link):
+        return (
+            f"[{idx + 1}] {link.source_host}:{link.source_interface} -> "
+            f"{link.destination_host}:{link.destination_interface}"
+        )
 
-    terminal_menu = TerminalMenu(
-        options,
-        menu_cursor_style=("fg_red", "bold"),
-        menu_highlight_style=("bg_green", "bold"),
+    selected_link = main.paginated_menu(
+        links,
+        page_size=9,
         title=f"Select Link to Edit - Lab: {lab_name}",
+        format_func=format_link,
     )
-    menu_entry_index = terminal_menu.show()
 
-    if menu_entry_index == len(options) - 1:
+    if selected_link is None:
         edit_lab_links()
         return
 
-    edit_link_fields(links[menu_entry_index], lab_name)
+    edit_link_fields(selected_link, lab_name)
 
 
 def edit_link_fields(link, lab_name):

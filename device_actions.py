@@ -4,13 +4,8 @@ import getpass
 import os
 import subprocess
 import tempfile
-import threading
-import time
-import sys
-import select
 from datetime import datetime
 from pathlib import Path
-from netmiko._telnetlib import telnetlib
 from napalm import get_network_driver
 from models import Host, Link, Lab, session
 import warnings
@@ -150,98 +145,29 @@ def connect_to_containerlab_host(host, lab, command=None):
 
 
 def connect_to_console(host):
-    """
-    Connect to a hardware device console using telnet via netmiko.
-    
-    has custom exit handling because ctrl + ] doesn't work in some terminals.
-    """
-    
+    """Connect to a hardware device console using the system telnet client."""
     if not host.console:
         print(f"No console address configured for host {host.hostname}")
         input("Press Enter to continue...")
         return
-    
-    # Parse console address - it might be host:port
+
     console_parts = host.console.split(':')
     if len(console_parts) == 2:
         console_host = console_parts[0]
-        console_port = int(console_parts[1])
+        console_port = str(console_parts[1])
     else:
         console_host = host.console
-        console_port = 23  # Default telnet port
-    
+        console_port = "23"
+
     print(f"Connecting to console {console_host}:{console_port} for {host.hostname}...")
-    
     try:
-        tn = telnetlib.Telnet()
-        tn.open(console_host, console_port, timeout=10)
-        print(f"Connected to {console_host}:{console_port}")
-        print("=" * 50)
-        print("TELNET CONSOLE SESSION")
-        print("Multiple ways to exit:")
-        print("1. Type 'QUIT' on a new line")
-        print("2. Press Ctrl+C to interrupt")
-        print("3. Use Ctrl+] then type 'quit' at telnet prompt")
-        print("=" * 50)
-        
-        # Custom interactive session with better exit handling
-        
-        # Flag to control the session
-        session_active = True
-        
-        def read_from_telnet():
-            """Read data from telnet connection and display it."""
-            while session_active:
-                try:
-                    # Use a short timeout for non-blocking reads
-                    data = tn.read_very_eager()
-                    if data:
-                        sys.stdout.write(data.decode('utf-8', errors='ignore'))
-                        sys.stdout.flush()
-                    else:
-                        time.sleep(0.01)  # Small delay to prevent high CPU usage
-                except Exception:
-                    break
-        
-        # Start the read thread
-        read_thread = threading.Thread(target=read_from_telnet, daemon=True)
-        read_thread.start()
-        
-        try:
-            while session_active:
-                # Check if there's input available
-                if sys.stdin in select.select([sys.stdin], [], [], 0.1)[0]:
-                    user_input = sys.stdin.readline()
-                    
-                    # Check for exit commands
-                    if user_input.strip().upper() == 'QUIT':
-                        print("\nExiting telnet session...")
-                        session_active = False
-                        break
-                    
-                    # Send input to telnet connection
-                    tn.write(user_input.encode('utf-8'))
-                
-        except KeyboardInterrupt:
-            print("\nTelnet session interrupted by user (Ctrl+C)")
-            session_active = False
-        except Exception as e:
-            print(f"\nTelnet session error: {e}")
-            session_active = False
-        
-        # Clean up
-        session_active = False
-        time.sleep(0.1)  # Give read thread time to exit
-        
+        subprocess.run(['telnet', console_host, console_port], check=False)
+    except FileNotFoundError:
+        print("Error: 'telnet' not found. Install it (e.g. 'brew install telnet') and try again.")
+        input("Press Enter to continue...")
     except Exception as e:
         print(f"Failed to connect to {console_host}:{console_port}: {e}")
         input("Press Enter to continue...")
-    finally:
-        try:
-            tn.close()
-        except:
-            pass
-        print("\nTelnet session closed.")
 
 
 def execute_remote_command(remote_host, remote_username, command, description="command"):
