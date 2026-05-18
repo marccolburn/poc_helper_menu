@@ -52,11 +52,11 @@ def paginated_menu(items, page_size=9, title="Select Item", format_func=None):
         end_idx = min(start_idx + page_size, len(items))
         page_items = items[start_idx:end_idx]
         
-        # Create options for current page
+        # Create options for current page (numbered 1-N relative to this page)
         if format_func:
-            options = [format_func(start_idx + i, item) for i, item in enumerate(page_items)]
+            options = [format_func(i, item) for i, item in enumerate(page_items)]
         else:
-            options = [f"[{start_idx + i + 1}] {item}" for i, item in enumerate(page_items)]
+            options = [f"[{i + 1}] {item}" for i, item in enumerate(page_items)]
         
         # Add navigation options
         nav_options = []
